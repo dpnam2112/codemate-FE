@@ -4,7 +4,9 @@
     <v-toolbar dense color="grey-darken-4">
       <v-select
         v-model="selectedLanguage"
-        :items="languages"
+        :items="Object.keys(JUDGE0_LANG).map(Number)"
+        :item-title="(id) => JUDGE0_LANG[id]"
+        :item-value="(id) => id"
         density="compact"
         hide-details
         class="language-select"
@@ -28,12 +30,12 @@
 <script setup lang="ts">
 import { EditorState } from '@codemirror/state';
 import { EditorView, keymap, lineNumbers, highlightActiveLine, highlightSpecialChars, drawSelection, dropCursor, rectangularSelection, crosshairCursor, highlightActiveLineGutter, hoverTooltip } from '@codemirror/view';
+import { CodeExerciseService } from '@/services/CodeExerciseService';
 import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { indentOnInput, syntaxHighlighting, defaultHighlightStyle, bracketMatching, foldGutter, indentUnit } from '@codemirror/language';
 import { closeBrackets, closeBracketsKeymap } from '@codemirror/autocomplete';
 import { lintGutter } from '@codemirror/lint';
-// import { javascript } from '@codemirror/lang-javascript';
-// import { rust } from '@codemirror/lang-rust';
+import { javascript } from '@codemirror/lang-javascript';
 import { cpp } from '@codemirror/lang-cpp';
 import { python } from '@codemirror/lang-python';
 import { java } from '@codemirror/lang-java';
@@ -41,6 +43,8 @@ import { LANGUAGES, LANGUAGE_MAP, DEFAULT_CODE } from '@/constants/templateLangu
 import { createSubmission, pollSubmission, prepareStdin } from '@/services/Professor/judge0api';
 import { llmCodeServices } from '@/services/llmCodeServices';
 import { TestInput, LineExplanation, CodeAnalysisRequest, LanguageKey } from '@/types/LLM_code';
+import { LanguageConfigDto } from '@/types/CodingExercise';
+import { JUDGE0_LANG } from '@/constants/judge0_lang';
 
 // Define types for hints
 interface LineHint {
@@ -53,13 +57,16 @@ const props = defineProps<{
   testInput: TestInput;
 }>();
 
+const route = useRoute();
+const exerciseId = computed(() => route.params.exerciseId as string);
+
 const emit = defineEmits<{
   (e: 'run-result', result: string): void;
   (e: 'submit-result', result: string): void;
   (e: 'update:loading', isLoading: boolean): void;
 }>();
 
-const selectedLanguage = ref<LanguageKey>('cpp');
+const selectedLanguage = ref<number>(54);
 const code = ref<string>(DEFAULT_CODE[selectedLanguage.value]);
 const editorContainer = ref<HTMLElement | null>(null);
 const languages = ref(LANGUAGES);
@@ -69,6 +76,8 @@ const isGettingHints = ref<boolean>(false);
 const lineExplanations = ref<LineExplanation[]>([]);
 const showError = inject("showError") as (message: string) => void;
 const showSuccess = inject("showSuccess") as (message: string) => void;
+const languageConfigs = ref<LanguageConfigDto[]>([]);
+
 let editor: EditorView | null = null;
 
 // Create a basic setup configuration since there's no basicSetup in CM6
@@ -97,10 +106,11 @@ const createBasicSetup = () => [
 ];
 
 // Language mapping for CodeMirror with proper typing
-const cmLanguages: Record<LanguageKey, any> = {
-  cpp: cpp(),
-  python: python(),
-  java: java(),
+const cmLanguages: Record<number, any> = {
+  54: cpp(),     // C++
+  62: java(),    // Java
+  63: javascript(), // JavaScript
+  71: python(),  // Python3
 };
 
 // Create hover tooltip handler based on line explanations
@@ -212,20 +222,20 @@ const getCommentSyntax = (language: LanguageKey): { start: string, end: string }
 const insertHintsIntoCode = (originalCode: string, hints: LineHint[], language: LanguageKey): string => {
   const commentSyntax = getCommentSyntax(language);
   const lines = originalCode.split('\n');
-  
+
   // Sort hints by line number in descending order to avoid position shifts
   const sortedHints = [...hints].sort((a, b) => b.line - a.line);
-  
+
   for (const hint of sortedHints) {
     // Make sure the line index exists in the array
     if (hint.line > 0 && hint.line <= lines.length) {
       const hintComment = `${commentSyntax.start}${hint.hint}${commentSyntax.end}`;
-      
+
       // Insert hint comment before the code line
       lines.splice(hint.line - 1, 0, hintComment);
     }
   }
-  
+
   return lines.join('\n');
 };
 
@@ -233,7 +243,7 @@ const insertHintsIntoCode = (originalCode: string, hints: LineHint[], language: 
 const giveHints = async (): Promise<void> => {
   try {
     isGettingHints.value = true;
-    
+
     // Mock data - in production this would be an API call
     const mockHintsData: LineHint[] = [
       { line: 2, hint: "Consider initializing variables here" },
@@ -241,25 +251,25 @@ const giveHints = async (): Promise<void> => {
       { line: 10, hint: "Don't forget to check for edge cases" },
       { line: 15, hint: "Remember to return the correct indices" }
     ];
-    
+
     // const response = await ApiService.getHints({
     //   code: code.value,
     //   language: selectedLanguage.value
     // });
     // const hints = response.data;
-    
+
     // Insert hints directly into the code
     const codeWithHints = insertHintsIntoCode(code.value, mockHintsData, selectedLanguage.value);
-    
+
     // Update the code with hints included
     code.value = codeWithHints;
-    
+
     // Reinitialize editor to show updated code
     nextTick(() => {
       initEditor();
       showSuccess("Hints have been added to your code as comments.");
     });
-    
+
   } catch (error) {
     console.error('Error getting code hints:', error);
     showError('Failed to add hints to your code');
@@ -385,103 +395,126 @@ const runCode = async (): Promise<void> => {
   }
 };
 
-// Submit code with similar logic as runCode
+// // Submit code with similar logic as runCode
+// const submitCode = async (): Promise<void> => {
+//   try {
+//     isLoading.value = true;
+//     emit('update:loading', true);
+//
+//     // Prepare stdin
+//     const stdin = prepareStdin(
+//       selectedLanguage.value,
+//       props.testInput.nums,
+//       props.testInput.target
+//     );
+//
+//     try {
+//       // Create submission
+//       const token = await createSubmission(
+//         code.value,
+//         LANGUAGE_MAP[selectedLanguage.value],
+//         stdin,
+//         '[0,1]'
+//       );
+//
+//       // Poll for results
+//       const result = await pollSubmission(token);
+//
+//       // Format and emit results
+//       let resultText = '';
+//       if (result.status.id === 3 && result.stdout && result.stdout.trim() === '[0,1]') {
+//         resultText = `
+// ✅ Solution Accepted!
+// Your solution passed all test cases.
+//
+// Test Result:
+// Input: nums = ${props.testInput.nums}, target = ${props.testInput.target}
+// Expected Output: [0,1]
+// Your Output: ${result.stdout.trim()}
+// Time: ${result.time} seconds
+// Memory: ${result.memory} KB
+//         `;
+//       } else {
+//         resultText = `
+// ❌ Solution Failed!
+// Your solution did not pass all test cases.
+//
+// Test Result:
+// Input: nums = ${props.testInput.nums}, target = ${props.testInput.target}
+// Expected Output: [0,1]
+// Your Output: ${result.stdout || 'No output'}
+// Status: ${result.status.description}
+// ${result.stderr ? 'Error: ' + result.stderr + '\n' : ''}
+// ${result.compile_output ? 'Compiler output: ' + result.compile_output + '\n' : ''}
+//         `;
+//       }
+//
+//       emit('submit-result', resultText);
+//     } catch (apiError: any) {
+//       // Handle API errors
+//       if (apiError.response) {
+//         // Server returned an error with status code
+//         const errorData = apiError.response.data;
+//         let detailedError = `Error (${apiError.response.status}): `;
+//
+//         if (errorData && typeof errorData === 'object') {
+//           if (errorData.error) {
+//             detailedError += errorData.error;
+//           } else if (errorData.message) {
+//             detailedError += errorData.message;
+//           } else {
+//             detailedError += JSON.stringify(errorData);
+//           }
+//         } else if (typeof errorData === 'string') {
+//           detailedError += errorData;
+//         } else {
+//           detailedError += 'Unknown error format';
+//         }
+//
+//         emit('submit-result', detailedError);
+//       } else if (apiError.request) {
+//         // Request was sent but no response received
+//         emit('submit-result', 'Error: No response received from server');
+//       } else {
+//         // Other errors when setting up the request
+//         emit('submit-result', `Error setting up request: ${apiError.message}`);
+//       }
+//     }
+//   } catch (error: any) {
+//     emit('submit-result', `Error submitting code: ${error.message}`);
+//   } finally {
+//     isLoading.value = false;
+//     emit('update:loading', false);
+//   }
+// };
+
 const submitCode = async (): Promise<void> => {
-  try {
-    isLoading.value = true;
-    emit('update:loading', true);
+  // Print out the code to be submitted
+  console.log('Code to be submitted:', code.value);
+}
 
-    // Prepare stdin
-    const stdin = prepareStdin(
-      selectedLanguage.value,
-      props.testInput.nums,
-      props.testInput.target
-    );
-
-    try {
-      // Create submission
-      const token = await createSubmission(
-        code.value,
-        LANGUAGE_MAP[selectedLanguage.value],
-        stdin,
-        '[0,1]'
-      );
-
-      // Poll for results
-      const result = await pollSubmission(token);
-
-      // Format and emit results
-      let resultText = '';
-      if (result.status.id === 3 && result.stdout && result.stdout.trim() === '[0,1]') {
-        resultText = `
-✅ Solution Accepted!
-Your solution passed all test cases.
-
-Test Result:
-Input: nums = ${props.testInput.nums}, target = ${props.testInput.target}
-Expected Output: [0,1]
-Your Output: ${result.stdout.trim()}
-Time: ${result.time} seconds
-Memory: ${result.memory} KB
-        `;
-      } else {
-        resultText = `
-❌ Solution Failed!
-Your solution did not pass all test cases.
-
-Test Result:
-Input: nums = ${props.testInput.nums}, target = ${props.testInput.target}
-Expected Output: [0,1]
-Your Output: ${result.stdout || 'No output'}
-Status: ${result.status.description}
-${result.stderr ? 'Error: ' + result.stderr + '\n' : ''}
-${result.compile_output ? 'Compiler output: ' + result.compile_output + '\n' : ''}
-        `;
-      }
-
-      emit('submit-result', resultText);
-    } catch (apiError: any) {
-      // Handle API errors
-      if (apiError.response) {
-        // Server returned an error with status code
-        const errorData = apiError.response.data;
-        let detailedError = `Error (${apiError.response.status}): `;
-
-        if (errorData && typeof errorData === 'object') {
-          if (errorData.error) {
-            detailedError += errorData.error;
-          } else if (errorData.message) {
-            detailedError += errorData.message;
-          } else {
-            detailedError += JSON.stringify(errorData);
-          }
-        } else if (typeof errorData === 'string') {
-          detailedError += errorData;
-        } else {
-          detailedError += 'Unknown error format';
-        }
-
-        emit('submit-result', detailedError);
-      } else if (apiError.request) {
-        // Request was sent but no response received
-        emit('submit-result', 'Error: No response received from server');
-      } else {
-        // Other errors when setting up the request
-        emit('submit-result', `Error setting up request: ${apiError.message}`);
-      }
-    }
-  } catch (error: any) {
-    emit('submit-result', `Error submitting code: ${error.message}`);
-  } finally {
-    isLoading.value = false;
-    emit('update:loading', false);
-  }
-};
 
 // Initialize editor when component is mounted
 onMounted(() => {
   initEditor();
 });
+
+// Fetch language configurations for the coding exercise
+onMounted(async () => {
+  let response = await CodeExerciseService.getLanguageConfigsOfAnExercise(
+    exerciseId.value, {showError: () => {}, showSuccess: () => {}}
+  );
+
+  languageConfigs.value = response.data;
+
+  const config = languageConfigs.value.find(c => c.judge0_language_id === selectedLanguage.value);
+  if (config) {
+    code.value = config.boilerplate_code;
+    nextTick(() => initEditor());
+  } else {
+    code.value = '// No boilerplate code available';
+  }
+})
 
 // Clean up when component is unmounted
 onUnmounted(() => {
@@ -492,14 +525,11 @@ onUnmounted(() => {
 });
 
 // Watch for language changes
-watch(selectedLanguage, (newLang) => {
-  code.value = DEFAULT_CODE[newLang as keyof typeof DEFAULT_CODE];
-  // Re-initialize editor with new language
-  nextTick(() => {
-    initEditor();
-  });
-
-  // Clear explanations when language changes
+watch(selectedLanguage, (id) => {
+  // Update boilerplate code based on selected language
+  const config = languageConfigs.value.find(c => c.judge0_language_id === id);
+  code.value = config?.boilerplate_code || '// No boilerplate code available';
+  nextTick(() => initEditor());
   lineExplanations.value = [];
 });
 

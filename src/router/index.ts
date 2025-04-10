@@ -298,7 +298,6 @@ const ProfessorRoutes = [
       name: "ProfessorCode",
       component: () => import("@/pages/Code/index.vue"),
       meta: { requiresAuth: false, role: "professor" },
-      meta: { requiresAuth: true, role: "professor" },
     }],
   },
   {

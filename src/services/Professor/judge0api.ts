@@ -4,9 +4,9 @@ import { JUDGE0_API } from "@/common/config";
 
 // Create submission to Judge0
 export const createSubmission = async (
-  sourceCode: string, 
-  languageId: number, 
-  stdin: string, 
+  sourceCode: string,
+  languageId: number,
+  stdin: string,
   expectedOutput?: string
 ): Promise<string> => {
   try {
@@ -14,22 +14,22 @@ export const createSubmission = async (
     const base64SourceCode = btoa(unescape(encodeURIComponent(sourceCode)));
     const base64Stdin = stdin ? btoa(unescape(encodeURIComponent(stdin))) : null;
     const base64ExpectedOutput = expectedOutput ? btoa(unescape(encodeURIComponent(expectedOutput))) : null;
-    
+
     const payload = {
       source_code: base64SourceCode,
       language_id: languageId,
       stdin: base64Stdin,
       expected_output: base64ExpectedOutput
     };
-    
+
     const response: AxiosResponse<SubmissionResponse> = await axios.post(
-      `${JUDGE0_API.baseURL}/submissions?base64_encoded=true`, 
-      payload, 
+      `${JUDGE0_API.baseURL}/submissions?base64_encoded=true`,
+      payload,
       {
         headers: JUDGE0_API.headers
       }
     );
-    
+
     return response.data.token;
   } catch (error) {
     console.error('Error creating submission:', error);
@@ -41,14 +41,14 @@ export const createSubmission = async (
 export const getSubmission = async (token: string): Promise<SubmissionResult> => {
   try {
     const response: AxiosResponse<SubmissionResult> = await axios.get(
-      `${JUDGE0_API.baseURL}/submissions/${token}?base64_encoded=true`, 
+      `${JUDGE0_API.baseURL}/submissions/${token}?base64_encoded=true`,
       {
         headers: JUDGE0_API.headers
       }
     );
-    
+
     const data = response.data;
-    
+
     // Giải mã kết quả từ base64
     if (data.stdout) {
       data.stdout = decodeURIComponent(escape(atob(data.stdout)));
@@ -59,7 +59,7 @@ export const getSubmission = async (token: string): Promise<SubmissionResult> =>
     if (data.compile_output) {
       data.compile_output = decodeURIComponent(escape(atob(data.compile_output)));
     }
-    
+
     return data;
   } catch (error) {
     console.error('Error getting submission:', error);
@@ -72,13 +72,13 @@ export const pollSubmission = async (token: string): Promise<SubmissionResult> =
   let submission: SubmissionResult;
   const maxTries = 10;
   let tries = 0;
-  
+
   do {
     try {
       await new Promise(resolve => setTimeout(resolve, 1000));
       submission = await getSubmission(token);
       tries++;
-      
+
       if (tries >= maxTries) {
         throw new Error('Timeout waiting for submission result');
       }
@@ -91,7 +91,7 @@ export const pollSubmission = async (token: string): Promise<SubmissionResult> =
       throw error;
     }
   } while (submission.status.id <= 2); // 1: In Queue, 2: Processing
-  
+
   return submission;
 };
 
@@ -101,7 +101,7 @@ export const prepareStdin = (language: string, nums: string, target: string): st
     if (!nums || !target) {
       throw new Error('Invalid input data: nums or target is undefined');
     }
-    
+
     if (language === 'cpp' || language === 'java') {
       return `${nums}\n${target}`;
     } else if (language === 'python') {
@@ -121,7 +121,7 @@ export const handleApiError = (error: any): string => {
     if (error.response) {
       const statusCode = error.response.status;
       const errorData = error.response.data;
-      
+
       let errorMessage = `Error (${statusCode}): `;
       if (typeof errorData === 'object' && errorData !== null) {
         errorMessage += errorData.error || errorData.message || JSON.stringify(errorData);
@@ -130,7 +130,7 @@ export const handleApiError = (error: any): string => {
       } else {
         errorMessage += error.message;
       }
-      
+
       return errorMessage;
     } else if (error.request) {
       // Yêu cầu được gửi nhưng không nhận được phản hồi

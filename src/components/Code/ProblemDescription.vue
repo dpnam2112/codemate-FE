@@ -7,12 +7,6 @@
     </v-tabs>
 
     <v-card-text v-if="descriptionTab === 'description'" class="problem-description pa-4 flex-grow-1 overflow-y-auto">
-<!--      <h2>Two sum</h2>
-      <div class="problem-tags mb-4">
-        <v-chip size="small" color="grey" class="mr-2">Easy</v-chip>
-        <v-chip size="small" color="grey" class="mr-2">Array</v-chip>
-        <v-chip size="small" color="grey">Hash table</v-chip>
-      </div> -->
 
       <div v-html="problemDescription"></div>
 
@@ -31,6 +25,9 @@
           <li v-for="(constraint, index) in constraints" :key="index">{{ constraint }}</li>
         </ul>
       </div>
+    </v-card-text>
+    <v-card-text v-else-if="descriptionTab === 'submission'" class="pa-4">
+      <SubmissionList :programmingExerciseId="exerciseId" :submissions="submissions" />
     </v-card-text>
 
     <v-card-text v-else class="chat-container d-flex flex-column flex-grow-1 pa-0">
@@ -115,8 +112,9 @@ import { PROBLEM_DESCRIPTION, PROBLEM_EXAMPLES, PROBLEM_CONSTRAINTS } from '@/co
 import { streamFromApi } from '@/common/api.service.ts';
 import { useRoute } from 'vue-router';
 import { llmCodeServices } from '@/services/llmCodeServices';
+import { CodeExerciseService } from '@/services/CodeExerciseService';
 import type { ChatMessage } from '@/types/chat';
-
+import SubmissionList from '@/components/Code/SubmissionList.vue';
 import axios from 'axios';
 
 const route = useRoute();
@@ -134,7 +132,7 @@ const md = new MarkdownIt({
     if (lang && hljs.getLanguage(lang)) {
       return `<pre class="hljs"><code>${hljs.highlight(code, { language: lang }).value}</code></pre>`;
     }
-    return `<pre class="hljs"><code>${md.utils.escapeHtml(code)}</code></pre>`;
+    return `<pre class="hljs"><code>${md.utils.escapeHtml(code)}</code></pre>`;v
   }
 });
 
@@ -272,6 +270,8 @@ const problemDescription = ref('');
 const examples = ref<ProblemExample[]>([]);
 const constraints = ref<string[]>([]);
 
+console.log('Exercise ID:', exerciseId.value);
+
 onMounted(async () => {
   try {
     const response = await axios.get<ExerciseCodeResponseForStudent>(
@@ -290,7 +290,6 @@ onMounted(async () => {
     console.error('Failed to load exercise', err);
   }
 });
-
 </script>
 
 <style scoped>
@@ -397,4 +396,5 @@ onMounted(async () => {
   background-color: #888;
 }
 </style>
+
 

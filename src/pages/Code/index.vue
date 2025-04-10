@@ -1,16 +1,18 @@
 <template>
-  <v-container fluid class="pa-0" style="height: 100vh; overflow: hidden;">
+  <v-container fluid class="pa-0" style="height: 100vh; overflow: auto;">
     <v-row no-gutters class="fill-height">
+
       <!-- Problem Description Panel -->
-      <v-col cols="3" class="border-right fill-height">
+      <div :style="{ width: sidebarWidth + 'px' }" class="resizable-sidebar fill-height">
         <ProblemDescription
           :initial-tab="descriptionTab"
           @update:tab="descriptionTab = $event"
         />
-      </v-col>
+        <div class="resize-handle" @mousedown="startResize" />
+      </div>
 
       <!-- Code Editor Panel -->
-      <v-col cols="9">
+      <v-col class="fill-height">
         <div class="d-flex flex-column fill-height">
           <!-- <CodeEditor
             :test-input="testInput"
@@ -49,6 +51,7 @@
 
 <script setup>
 import { DEFAULT_TEST_INPUT } from '@/constants/templateProblem';
+import SubmissionListPreview from '@/components/Code/SubmissionListPreview.vue';
 
 // State variables
 const descriptionTab = ref('description');
@@ -90,13 +93,33 @@ const handleTestcaseToggle = (expanded) => {
 
 // Prevent body scrolling
 onMounted(() => {
-  document.body.style.overflow = 'hidden';
 });
+
+/*This logic is for sidebar adjustment.*/;
+const sidebarWidth = ref(320); // default 320px
+
+const startResize = (e) => {
+  const startX = e.clientX;
+  const startW = sidebarWidth.value;
+
+  const onMouseMove = (e) => {
+    const delta = e.clientX - startX;
+    sidebarWidth.value = Math.max(240, startW + delta);
+  };
+
+  const onMouseUp = () => {
+    document.removeEventListener('mousemove', onMouseMove);
+    document.removeEventListener('mouseup', onMouseUp);
+  };
+
+  document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mouseup', onMouseUp);
+};
 </script>
 
 <style>
 html, body {
-  overflow: hidden;
+  overflow: auto;
   height: 100%;
   margin: 0;
   padding: 0;
@@ -104,5 +127,23 @@ html, body {
 
 .border-right {
   border-right: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.resizable-sidebar {
+  position: relative;
+  background-color: #1e1e1e;
+  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  display: flex;
+  flex-direction: column;
+}
+
+.resize-handle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
 }
 </style>

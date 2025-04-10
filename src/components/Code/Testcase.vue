@@ -9,43 +9,81 @@
 
     <!-- Collapsible test cases container -->
     <v-expand-transition>
-      <v-sheet 
-        v-if="isExpanded" 
-        class="test-cases" 
-        :height="testCasesHeight" 
+      <v-sheet
+        v-if="isExpanded"
+        class="test-cases d-flex flex-column"
+        :height="testCasesHeight"
         color="grey-darken-4"
       >
         <v-tabs v-model="testTab" color="primary">
           <v-tab value="testcase">Testcase</v-tab>
           <v-tab value="result">Result</v-tab>
         </v-tabs>
-        
-        <v-window v-model="testTab">
+
+        <v-window v-model="testTab" class="d-flex flex-column flex-grow-1">
+          <!-- Testcase Tab -->
           <v-window-item value="testcase">
-            <v-card-text class="overflow-auto" style="max-height: calc(100% - 48px)">
-              <v-row>
-                <v-col cols="6">
-                  <v-text-field
-                    v-model="localInput.nums"
-                    label="nums ="
-                    density="compact"
-                    bg-color="grey-darken-3"
-                    @update:model-value="updateInput"
-                  ></v-text-field>
-                </v-col>
-                <v-col cols="6">
-                  <v-text-field
-                    v-model="localInput.target"
-                    label="target ="
-                    density="compact"
-                    bg-color="grey-darken-3"
-                    @update:model-value="updateInput"
-                  ></v-text-field>
-                </v-col>
-              </v-row>
+            <v-card-text class="d-flex flex-column flex-grow-1" style="overflow: hidden">
+              <div class="d-flex align-center mb-2">
+                <v-btn size="small" variant="outlined" color="primary" @click="addTestcase">
+                  <v-icon start>mdi-plus</v-icon> Add Testcase
+                </v-btn>
+                <v-spacer></v-spacer>
+              </div>
+
+              <v-tabs
+                v-model="activeTestcaseIndex"
+                grow
+                class="testcase-tab-bar"
+                show-arrows
+              >
+                <v-tab
+                  v-for="(tc, index) in testcases"
+                  :key="index"
+                  :value="index"
+                >
+                  Testcase {{ index + 1 }}
+                </v-tab>
+              </v-tabs>
+
+              <v-window v-model="activeTestcaseIndex" class="overflow-auto flex-grow-1">
+                <v-window-item
+                  v-for="(tc, index) in testcases"
+                  :key="index"
+                  :value="index"
+                >
+                  <v-row class="mt-2">
+                    <v-col cols="12" md="6">
+                      <v-textarea
+                        v-model="tc.input"
+                        label="Input"
+                        bg-color="grey-darken-3"
+                        auto-grow
+                        density="compact"
+                        class="monospace scroll-box"
+                        rows="4"
+                        max-rows="10"
+                      ></v-textarea>
+                    </v-col>
+                    <v-col cols="12" md="6">
+                      <v-textarea
+                        v-model="tc.expected_output"
+                        label="Expected Output"
+                        bg-color="grey-darken-3"
+                        auto-grow
+                        density="compact"
+                        class="monospace scroll-box"
+                        rows="4"
+                        max-rows="10"
+                      ></v-textarea>
+                    </v-col>
+                  </v-row>
+                </v-window-item>
+              </v-window>
             </v-card-text>
           </v-window-item>
 
+          <!-- Result Tab -->
           <v-window-item value="result">
             <v-card-text class="overflow-auto" style="max-height: calc(100% - 48px)">
               <div v-if="testResult">
@@ -63,48 +101,38 @@
 </template>
 
 <script setup lang="ts">
-import { DEFAULT_TEST_INPUT } from '@/constants/templateProblem';
-
-interface TestInput {
-  nums: string;
-  target: string;
-  [key: string]: string;
+interface CustomTestcase {
+  input: string;
+  expected_output: string;
 }
 
-interface TestCasePanelProps {
-  initialTab?: string;
-  result?: string;
-}
-
-const props = withDefaults(defineProps<TestCasePanelProps>(), {
+const props = withDefaults(defineProps<{ initialTab?: string; result?: string }>(), {
   initialTab: 'testcase',
-  result: ''
+  result: '',
 });
 
 const emit = defineEmits<{
   (e: 'update:tab', tab: string): void;
-  (e: 'update:input', input: TestInput): void;
+  (e: 'update:input', input: CustomTestcase[]): void;
   (e: 'toggle', isExpanded: boolean): void;
 }>();
 
 const testTab = ref<string>(props.initialTab);
 const testResult = ref<string>(props.result);
-const localInput = ref<TestInput>({...DEFAULT_TEST_INPUT});
 const isExpanded = ref<boolean>(true);
 const testCasesHeight = ref<string>('300px');
+const activeTestcaseIndex = ref(0);
 
-// Toggle test cases visibility
+const testcases = ref<CustomTestcase[]>([
+  { input: '2 7 11 15\n9', expected_output: '[0,1]' },
+  { input: '1 2 3\n4', expected_output: '[0,3]' },
+]);
+
 const toggleTestCases = (): void => {
   isExpanded.value = !isExpanded.value;
   emit('toggle', isExpanded.value);
 };
 
-// Update parent component with input changes
-const updateInput = (): void => {
-  emit('update:input', localInput.value);
-};
-
-// Watch for result changes
 watch(() => props.result, (newValue) => {
   testResult.value = newValue;
   isExpanded.value = true;
@@ -114,15 +142,24 @@ watch(() => props.result, (newValue) => {
   }
 });
 
-// Watch for tab changes and emit event
 watch(testTab, (newValue) => {
   emit('update:tab', newValue);
 });
+
+watch(testcases, (newValue) => {
+  emit('update:input', newValue);
+}, { deep: true });
+
+const addTestcase = () => {
+  testcases.value.push({ input: '', expected_output: '' });
+  activeTestcaseIndex.value = testcases.value.length - 1;
+};
 </script>
 
 <style scoped>
 .test-cases {
   border-top: 1px solid rgba(255, 255, 255, 0.12);
+  overflow: hidden;
 }
 
 .test-cases-header {
@@ -142,4 +179,14 @@ watch(testTab, (newValue) => {
   max-height: 100%;
   overflow: auto;
 }
+
+.monospace {
+  font-family: monospace;
+}
+
+.scroll-box {
+  max-height: 240px;
+  overflow: auto;
+}
 </style>
+

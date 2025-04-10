@@ -114,7 +114,8 @@ export const navigationGuard: NavigationGuardWithThis<any> = async (to, from, ne
         "/course-management",
         "/feedback-management",
         "/add-course",
-        "/add-user"
+        "/add-user",
+        "/exercise-code"
       ];
       const isAllowedPath = allowedPathPatterns.some((pattern) =>
         to.path.startsWith(pattern)
